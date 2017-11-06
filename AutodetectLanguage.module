@@ -4,14 +4,14 @@
  * Autodetect Language
  *
  * This module tries to find a best match between a user's language
- * and one of the installed site languages. 
+ * and one of the installed site languages.
  *
  * Sets two session variables:
  * $session->languageAlreadyDetected (true|false)
  * $session->languageDetectionFailed (returns true if fell back to default);
  */
 class AutodetectLanguage extends WireData implements Module, ConfigurableModule {
-    
+
     /**
      * Return information about this module (required)
      *
@@ -25,22 +25,24 @@ class AutodetectLanguage extends WireData implements Module, ConfigurableModule 
             'version' => 103,
             'singular' => true,
             'autoload' => true,
-        ); 
+        );
     }
 
     public function init() {
         wire()->addHookBefore("Page::render", $this, "detectLanguageRedirect");
     }
-    
+
     public function __construct() {
         $this->defaultSiteLanguageCode = "";
         $this->onlyOnHomepage = "";
-	$this->noDetectGetParam = "";
+        $this->noDetectGetParam = "";
+        $this->noBackend = 1;
     }
 
     public function detectLanguageRedirect(HookEvent $event) {
-        if (isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
-            $page = wire("page");
+        $page = $event->object;
+        if (isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])
+            AND ($page->template != "admin" OR $this->noBackend == false)) {
 
             // defaults to "en" if unset
             if (empty($this->defaultSiteLanguageCode)) {
@@ -55,12 +57,11 @@ class AutodetectLanguage extends WireData implements Module, ConfigurableModule 
                 } elseif ($this->onlyOnHomepage == true AND $page->id == 1) {
                     $run = true;
                 } else {
-                    $run = false;
                     $this->session->languageAlreadyDetected = true;
                 }
             }
 
-            if ($run === true) {
+            if ($run) {
                 // Initalize this session variable. Lets you know when
                 // the language detection failed and fell back to "default"
                 $this->session->languageDetectionFailed = true;
@@ -152,9 +153,8 @@ class AutodetectLanguage extends WireData implements Module, ConfigurableModule 
     }
 
     public static function getModuleConfigInputfields(array $data) {
-        $inputfields = new InputfieldWrapper(); 
- 
-        // Option to set the default language code
+        $inputfields = new InputfieldWrapper();
+
         $field = wire('modules')->get('InputfieldText');
         $field->name = 'defaultSiteLanguageCode';
         $field->label = __("Default system language code");
@@ -165,17 +165,24 @@ class AutodetectLanguage extends WireData implements Module, ConfigurableModule 
         $field = wire('modules')->get('InputfieldCheckbox');
         $field->name ='onlyOnHomepage';
         $field->label = 'Only detect language on homepage';
-        $field->attr('value', $data['onlyOnHomepage'] ? $data['onlyOnHomepage'] : 0 );
-        $field->attr('checked', $data['onlyOnHomepage'] === 1 ? 'checked' : '' );
+        $field->attr('value', isset($data['onlyOnHomepage']) ? $data['onlyOnHomepage'] : 0 );
+        $field->attr('checked', ($field->value == 1) ? 'checked' : '' );
         $inputfields->add($field);
 
-	$field = wire('modules')->get('InputfieldText');
-	$field->name = 'noDetectGetParam';
-	$field->label = __("Do not detect language if GET parameter is set");
-	$field->description = __("If this GET parameter is set, AutodetectLanguage will not try to detect the user's language. This might be helpful for newsletters or other things. For example, if you were to set this setting to \"nodetect\" and the page would be accessed via *http://example.com/?nodetect*, redirection to the preferred user's language will not happen.");
-	if(isset($data['noDetectGetParam'])) $field->value = $data['noDetectGetParam'];
-	$inputfields->add($field);
+        $field = wire('modules')->get('InputfieldText');
+        $field->name = 'noDetectGetParam';
+        $field->label = __("Do not detect language if GET parameter is set");
+        $field->description = __("If this GET parameter is set, AutodetectLanguage will not try to detect the user's language. This might be helpful for newsletters or other things. For example, if you were to set this setting to \"nodetect\" and the page would be accessed via *http://example.com/?nodetect*, redirection to the preferred user's language will not happen.");
+        if(isset($data['noDetectGetParam'])) $field->value = $data['noDetectGetParam'];
+        $inputfields->add($field);
 
-        return $inputfields; 
+        $field = wire('modules')->get('InputfieldCheckbox');
+        $field->name ='noBackend';
+        $field->label = 'Only detect language on frontend';
+        $field->attr('value', isset($data['noBackend']) ? $data['noBackend'] : 0 );
+        $field->attr('checked', ($field->value == 1) ? 'checked' : '' );
+        $inputfields->add($field);
+
+        return $inputfields;
     }
 }
